@@ -1,3 +1,7 @@
+# Emojis JSON
+
+A JSON file containing group, subgroup, character code, name, and version information for emojis based on the datafiles provided by [unicode.org](https://unicode.org). The version information can be used to check for support by Emoji release number.
+
 ## Content Scraping
 
 Data sources loaded from unicode.org website:
@@ -31,7 +35,7 @@ node index.js [--no-skin-tone|-S] [--pretty|-p]
 
 See emojis-by-category.json, but the general structure is:
 
-```json
+```
 {
   "versions": [12, 11, ...],
   "tests": [
@@ -56,8 +60,8 @@ See emojis-by-category.json, but the general structure is:
   ]
 ```
 
-- `versions` - all emoji release versions in the dataset
-- `tests` - specific codes that can be used to test for support by version number
+- `versions` - all emoji release versions in the dataset (in descending order)
+- `tests` - specific codes that can be used to test for support by version number (in descending order)
 - `groups` - data containing group -> subgroup -> emojis
 
 NOTE: the code value is a lowercase string of the hex values with multiple character codes separated by underscores. This makes it easier to review by eye, I could consider changing this... but you can convert a code into the bytes for an emoji character via:
