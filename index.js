@@ -3,6 +3,9 @@ const { promisify } = require('util');
 const fs = require('fs');
 const readline = require('readline');
 
+const cheerio = require('cheerio');
+const pcheerio = require('pseudo-cheerio');
+
 const readFileAsync = promisify(fs.readFile);
 
 const FULL_EMOJI_LIST = './full-emoji-list.html';
@@ -11,7 +14,8 @@ const EMOJI_SEQUENCES = './emoji-sequences.txt';
 // ## Main
 
 const main = async () => {
-  await getVersions();
+  // await getVersions();
+  await getFullList();
 };
 
 // ## Get code-to-version object
@@ -22,12 +26,7 @@ const RANGE_DIVIDER = '..';
 const getVersions = async () => {
   const versions = {};
 
-  // https://nodejs.org/api/readline.html#readline_example_read_file_stream_line_by_line
-  const fileStream = fs.createReadStream(EMOJI_SEQUENCES);
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity
-  });
+  const rl = _asyncLineReader(EMOJI_SEQUENCES);
 
   for await (const line of rl) {
     const parsed = _parseLine(line);
@@ -44,10 +43,7 @@ const getVersions = async () => {
   }
 };
 
-// ### Parse line
-//
-// @return {object({ start: string, end: string, version: float })}
-//
+// Parse line - returns { start: string, end: string, version: float }
 const _parseLine = line => {
   line = line.trim();
   if (line && !line.startsWith('#')) {
@@ -83,8 +79,6 @@ const _parseLine = line => {
   return null;
 };
 
-const _setDefault = (obj, key) => obj[key] || (obj[key] = {});
-
 const _getRange = (startStr, endStr) => {
   let isMatching = true;
   let prefix = '';
@@ -114,6 +108,85 @@ const _getRange = (startStr, endStr) => {
   }
 
   return ret;
+};
+
+// ## Get full list
+
+const getFullList = async () => {
+  console.log('READ FILE!!!!!!'); //REMMM
+  const rl = await _asyncLineReader(FULL_EMOJI_LIST);
+
+  let curRow = '';
+
+  let category = null;
+  let sub = null;
+
+  for await (let line of rl) {
+    line = line.trim();
+    if (line.startsWith('<tr>')) {
+      assert(!curRow, `found a tr inside a tr! "${curRow}" and "${line}"`);
+      curRow += line;
+    } else if (curRow) {
+      curRow += line;
+    }
+    if (line.endsWith('</tr>')) {
+      const parsed = _parseRow(curRow);
+
+      // parse the row
+      if (parsed !== null) {
+        if (parsed.category) {
+          category = parsed.category;
+        } else if (parsed.sub) {
+          sub = parsed.sub;
+        } else {
+          const { code, name } = parsed;
+          console.log(category, sub, code, name);
+        }
+      }
+
+      curRow = '';
+    }
+  }
+};
+
+const _parseRow = rowHtml => {
+  const $ = cheerio.load(`<table>${rowHtml}</table>`);
+
+  const bigheadElt = $('th.bighead');
+  if (bigheadElt.length) {
+    const category = bigheadElt.text().trim();
+    return { category };
+  }
+
+  const mediumheadElt = $('th.mediumhead');
+  if (mediumheadElt.length) {
+    const sub = mediumheadElt.text().trim();
+    return { sub };
+  }
+
+  const codeElt = $('td.code');
+  if (codeElt.length) {
+    const code = $('td.code a[name]').attr('name');
+    const name = $('td')
+      .last()
+      .text()
+      .trim();
+    return { code, name };
+  }
+
+  return null;
+};
+
+// ## Helpers
+
+const _asyncLineReader = filepath => {
+  // https://nodejs.org/api/readline.html#readline_example_read_file_stream_line_by_line
+  const fileStream = fs.createReadStream(filepath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+  return rl;
 };
 
 //

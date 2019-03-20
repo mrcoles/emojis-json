@@ -100,6 +100,12 @@ parse5@^3.0.1:
   dependencies:
     "@types/node" "*"
 
+pseudo-cheerio@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/pseudo-cheerio/-/pseudo-cheerio-1.0.5.tgz#50370c5ad24460c49d7a2e84882b3d5437778a85"
+  dependencies:
+    cheerio "^1.0.0-rc.2"
+
 readable-stream@^3.1.1:
   version "3.2.0"
   resolved "https://registry.yarnpkg.com/readable-stream/-/readable-stream-3.2.0.tgz#de17f229864c120a9f56945756e4f32c4045245d"
