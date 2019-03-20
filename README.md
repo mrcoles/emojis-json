@@ -10,6 +10,7 @@ Get sequences (with versions):
 
 ```
 wget https://unicode.org/Public/emoji/12.0/emoji-sequences.txt
+wget https://unicode.org/Public/emoji/12.0/emoji-zwj-sequences.txt
 ```
 
 ## Converting the list

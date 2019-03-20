@@ -10,23 +10,39 @@ const readFileAsync = promisify(fs.readFile);
 
 const FULL_EMOJI_LIST = './full-emoji-list.html';
 const EMOJI_SEQUENCES = './emoji-sequences.txt';
+const EMOJI_ZWJ_SEQUENCES = './emoji-zwj-sequences.txt';
+const ALL_EMOJI_SEQUENCES = [EMOJI_SEQUENCES, EMOJI_ZWJ_SEQUENCES];
 
 // ## Main
 
 const main = async () => {
-  // await getVersions();
-  await getFullList();
+  const codeToVersion = await getCodeToVersion();
+  console.log('CODETOVERSION?', JSON.stringify(codeToVersion)); //REMMMMM
+  const categories = await getFullList(codeToVersion);
+
+  const versionsSet = new Set(Object.values(codeToVersion));
+  const versions = Array.from(versionsSet);
+  versions.sort().reverse();
+
+  const result = { versions, categories };
 };
 
 // ## Get code-to-version object
 
-const FQFD_SUFFIX = 'fe0f';
+const FQFD_SUFFIX = '_fe0f';
 const RANGE_DIVIDER = '..';
 
-const getVersions = async () => {
-  const versions = {};
+const getCodeToVersion = async () => {
+  const codeToVersion = {};
 
-  const rl = _asyncLineReader(EMOJI_SEQUENCES);
+  for (const filepath of ALL_EMOJI_SEQUENCES) {
+    await _getCodeToVersionHelper(filepath, codeToVersion);
+  }
+  return codeToVersion;
+};
+
+const _getCodeToVersionHelper = async (filepath, codeToVersion) => {
+  const rl = _asyncLineReader(filepath);
 
   for await (const line of rl) {
     const parsed = _parseLine(line);
@@ -34,13 +50,15 @@ const getVersions = async () => {
     if (parsed) {
       // console.log('  .. ', parsed);
       const { codes, version } = parsed;
-      console.log(`${JSON.stringify(codes)} -> ${version}`);
+      // console.log(`${JSON.stringify(codes)} -> ${version}`);
 
       codes.forEach(code => {
-        versions[code] = version;
+        codeToVersion[code] = version;
       });
     }
   }
+
+  return codeToVersion;
 };
 
 // Parse line - returns { start: string, end: string, version: float }
@@ -49,10 +67,15 @@ const _parseLine = line => {
   if (line && !line.startsWith('#')) {
     const m = line.match(/([^;]+);[^;]+;[^#]+#\s*([0-9]+(.[0-9]+)?)/);
     if (m) {
-      let code_points = m[1]
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, '');
+      let code_points = m[1].trim().toLowerCase();
+
+      assert(
+        code_points.indexOf(RANGE_DIVIDER) === -1 ||
+          code_points.indexOf(' ') === -1,
+        `cannot have spaces and a range divider: ${code_points}`
+      );
+
+      code_points = code_points.replace(/\s+/g, '_');
 
       let sp = code_points.split(RANGE_DIVIDER);
 
@@ -98,12 +121,18 @@ const _getRange = (startStr, endStr) => {
     }
   }
 
+  const suffixLen = startStr.length - prefix.length;
+
   // create the result
   const ret = [];
 
   let t = startNum;
   while (t <= endNum) {
-    ret.push(`${prefix}${t.toString(16).toLowerCase()}`);
+    const suffix = t
+      .toString(16)
+      .toLowerCase()
+      .padStart(suffixLen, '0');
+    ret.push(prefix + suffix);
     t++;
   }
 
@@ -112,14 +141,14 @@ const _getRange = (startStr, endStr) => {
 
 // ## Get full list
 
-const getFullList = async () => {
-  console.log('READ FILE!!!!!!'); //REMMM
+const getFullList = async (codeToVersion = {}) => {
+  const categoriesArr = [];
+
   const rl = await _asyncLineReader(FULL_EMOJI_LIST);
 
   let curRow = '';
-
-  let category = null;
-  let sub = null;
+  let subsArr = null;
+  let emojisArr = null;
 
   for await (let line of rl) {
     line = line.trim();
@@ -135,18 +164,32 @@ const getFullList = async () => {
       // parse the row
       if (parsed !== null) {
         if (parsed.category) {
-          category = parsed.category;
+          let category = parsed.category;
+          subsArr = [];
+          categoriesArr.push({ category, subs: subsArr });
         } else if (parsed.sub) {
           sub = parsed.sub;
+          assert(subsArr, `must have subArr to add sub: ${sub}`);
+          emojisArr = [];
+          subsArr.push({ sub, emojis: emojisArr });
         } else {
           const { code, name } = parsed;
-          console.log(category, sub, code, name);
+          const version = codeToVersion[code];
+          assert(
+            emojisArr,
+            `must have emojisArr to add an emoji: ${code} (${name})`
+          );
+          emojisArr.push([code, name, version]);
+          console.log(category, sub, code, name, version); //REMM
+          assert(version, `no version found for ${code} (${name})`);
         }
       }
 
       curRow = '';
     }
   }
+
+  return categoriesArr;
 };
 
 const _parseRow = rowHtml => {
