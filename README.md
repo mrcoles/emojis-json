@@ -1,17 +1,17 @@
 ## Content Scraping
 
-Get base html:
+1. Get full test page
 
-```
-wget https://unicode.org/emoji/charts/full-emoji-list.html
-```
+   ```
+   wget https://unicode.org/Public/emoji/12.0/emoji-test.txt
+   ```
 
-Get sequences (with versions):
+2. Get sequences (with versions):
 
-```
-wget https://unicode.org/Public/emoji/12.0/emoji-sequences.txt
-wget https://unicode.org/Public/emoji/12.0/emoji-zwj-sequences.txt
-```
+   ```
+   wget https://unicode.org/Public/emoji/12.0/emoji-sequences.txt
+   wget https://unicode.org/Public/emoji/12.0/emoji-zwj-sequences.txt
+   ```
 
 ## Converting the list
 

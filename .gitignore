@@ -3,4 +3,5 @@ node_modules/
 # data files that you need to download yourself (see README)
 emoji-sequences.txt
 emoji-zwj-sequences.txt
+emoji-test.txt
 full-emoji-list.html

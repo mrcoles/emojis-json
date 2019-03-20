@@ -3,34 +3,40 @@ const { promisify } = require('util');
 const fs = require('fs');
 const readline = require('readline');
 
-const cheerio = require('cheerio');
-const pcheerio = require('pseudo-cheerio');
+const rw = require('rw');
 
 const readFileAsync = promisify(fs.readFile);
 
-const FULL_EMOJI_LIST = './full-emoji-list.html';
+const FQFD_SUFFIX = '_fe0f';
+const RANGE_DIVIDER = '..';
+
+const EMOJI_TEST = './emoji-test.txt';
 const EMOJI_SEQUENCES = './emoji-sequences.txt';
 const EMOJI_ZWJ_SEQUENCES = './emoji-zwj-sequences.txt';
 const ALL_EMOJI_SEQUENCES = [EMOJI_SEQUENCES, EMOJI_ZWJ_SEQUENCES];
 
 // ## Main
 
-const main = async () => {
+const main = async (pretty = false, noSkinTone = false) => {
   const codeToVersion = await getCodeToVersion();
-  console.log('CODETOVERSION?', JSON.stringify(codeToVersion)); //REMMMMM
-  const categories = await getFullList(codeToVersion);
+  const groups = await getFullList(codeToVersion, noSkinTone);
 
   const versionsSet = new Set(Object.values(codeToVersion));
   const versions = Array.from(versionsSet);
-  versions.sort().reverse();
+  versions.sort((a, b) => b - a); // sort in descending order
 
-  const result = { versions, categories };
+  const tests = getVersionTests(versions, groups);
+
+  const result = { versions, tests, groups };
+
+  const content = pretty
+    ? JSON.stringify(result, null, 2)
+    : JSON.stringify(result);
+
+  rw.writeFileSync('/dev/stdout', content, 'utf8');
 };
 
 // ## Get code-to-version object
-
-const FQFD_SUFFIX = '_fe0f';
-const RANGE_DIVIDER = '..';
 
 const getCodeToVersion = async () => {
   const codeToVersion = {};
@@ -45,7 +51,7 @@ const _getCodeToVersionHelper = async (filepath, codeToVersion) => {
   const rl = _asyncLineReader(filepath);
 
   for await (const line of rl) {
-    const parsed = _parseLine(line);
+    const parsed = _parseVersionLine(line);
     // console.log(line);
     if (parsed) {
       // console.log('  .. ', parsed);
@@ -62,7 +68,7 @@ const _getCodeToVersionHelper = async (filepath, codeToVersion) => {
 };
 
 // Parse line - returns { start: string, end: string, version: float }
-const _parseLine = line => {
+const _parseVersionLine = line => {
   line = line.trim();
   if (line && !line.startsWith('#')) {
     const m = line.match(/([^;]+);[^;]+;[^#]+#\s*([0-9]+(.[0-9]+)?)/);
@@ -141,83 +147,126 @@ const _getRange = (startStr, endStr) => {
 
 // ## Get full list
 
-const getFullList = async (codeToVersion = {}) => {
-  const categoriesArr = [];
+const getFullList = async (codeToVersion = {}, noSkinTone = false) => {
+  const groupsArr = [];
 
-  const rl = await _asyncLineReader(FULL_EMOJI_LIST);
+  const rl = await _asyncLineReader(EMOJI_TEST);
 
-  let curRow = '';
-  let subsArr = null;
+  let subgroupsArr = null;
   let emojisArr = null;
+
+  let prevName = null; // only take first code for a name
 
   for await (let line of rl) {
     line = line.trim();
-    if (line.startsWith('<tr>')) {
-      assert(!curRow, `found a tr inside a tr! "${curRow}" and "${line}"`);
-      curRow += line;
-    } else if (curRow) {
-      curRow += line;
-    }
-    if (line.endsWith('</tr>')) {
-      const parsed = _parseRow(curRow);
+    const parsed = _parseTestLine(line);
 
-      // parse the row
-      if (parsed !== null) {
-        if (parsed.category) {
-          let category = parsed.category;
-          subsArr = [];
-          categoriesArr.push({ category, subs: subsArr });
-        } else if (parsed.sub) {
-          sub = parsed.sub;
-          assert(subsArr, `must have subArr to add sub: ${sub}`);
-          emojisArr = [];
-          subsArr.push({ sub, emojis: emojisArr });
-        } else {
-          const { code, name } = parsed;
-          const version = codeToVersion[code];
-          assert(
-            emojisArr,
-            `must have emojisArr to add an emoji: ${code} (${name})`
-          );
-          emojisArr.push([code, name, version]);
-          console.log(category, sub, code, name, version); //REMM
-          assert(version, `no version found for ${code} (${name})`);
-        }
+    // parse the row - needs valid row, skip name dupes (first
+    // should be a fully-qualified code), check noSkinTone flag
+    if (
+      parsed !== null &&
+      (!prevName || !parsed.name || parsed.name !== prevName) &&
+      (!noSkinTone || !parsed.name || parsed.name.indexOf('skin tone') === -1)
+    ) {
+      // console.log(JSON.stringify(parsed));
+      if (parsed.group) {
+        let group = parsed.group;
+        subgroupsArr = [];
+        groupsArr.push({ group, subgroups: subgroupsArr });
+      } else if (parsed.subgroup) {
+        subgroup = parsed.subgroup;
+        assert(
+          subgroupsArr,
+          `must have subgroupArr to add subgroup: ${subgroup}`
+        );
+        emojisArr = [];
+        subgroupsArr.push({ subgroup, emojis: emojisArr });
+      } else {
+        const { code, name } = parsed;
+        const version = codeToVersion[code];
+        assert(
+          emojisArr,
+          `must have emojisArr to add an emoji: ${code} (${name})`
+        );
+        emojisArr.push([code, name, version]);
+        // console.log(group, subgroup, code, name, version);
+        assert(version, `no version found for ${code} (${name})`);
       }
+    }
 
-      curRow = '';
+    if (parsed && parsed.name) {
+      prevName = parsed.name;
     }
   }
 
-  return categoriesArr;
+  return groupsArr;
 };
 
-const _parseRow = rowHtml => {
-  const $ = cheerio.load(`<table>${rowHtml}</table>`);
+const _prfxGroup = '# group:';
+const _prfxSubgroup = '# subgroup:';
 
-  const bigheadElt = $('th.bighead');
-  if (bigheadElt.length) {
-    const category = bigheadElt.text().trim();
-    return { category };
+const _parseTestLine = line => {
+  if (line.startsWith(_prfxGroup)) {
+    const group = line.substring(_prfxGroup.length).trim();
+    return { group };
+  } else if (line.startsWith(_prfxSubgroup)) {
+    const subgroup = line.substring(_prfxSubgroup.length).trim();
+    return { subgroup };
+  } else if (line && !line.startsWith('#')) {
+    const m = line.match(/([^;]+);([^;]+)#\s*[^\s]+\s(.*)/);
+    if (m) {
+      const code = m[1]
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+      const status = m[2].trim();
+      const name = m[3].trim();
+      return { code, status, name };
+    }
   }
-
-  const mediumheadElt = $('th.mediumhead');
-  if (mediumheadElt.length) {
-    const sub = mediumheadElt.text().trim();
-    return { sub };
-  }
-
-  const codeElt = $('td.code');
-  if (codeElt.length) {
-    const code = $('td.code a[name]').attr('name');
-    const name = $('td')
-      .last()
-      .text()
-      .trim();
-    return { code, name };
-  }
-
   return null;
+};
+
+// ## Version tests
+
+const getVersionTests = (versions, groups) => {
+  const tests = new Map([
+    [12, '1f90d'], // white heart
+    [11, '1f970'], // smiling face with hearts
+    [10, '1f929'], // start-struck
+    [9, '1f923'], // rolling on the floor laughing
+    [8, '1f643'], // upside down face
+    [7, '1f642'], // slightly smiling face
+    [6, '1f428'], // koala
+    [6.1, '1f617'], // kissing face
+    [5.2, '26f0'], // mountain
+    [5.1, '2b50'], // star
+    [4.1, '26ab'], // black circle
+    [4, '2615'], // hot beverage
+    [3.2, '2764'], // red heart
+    [3, '0023_fe0f_20e3'], // keycap: #
+    [1.1, '231a'] // watch
+  ]);
+
+  versions.forEach(version => {
+    if (!tests.has(version)) {
+      let match;
+      for (const { subgroups } of groups) {
+        for (const { emojis } of subgroups) {
+          match = emojis.find(([c, n, v]) => version === v);
+          if (match) {
+            tests.set(v, c);
+            break;
+          }
+        }
+        if (match) {
+          break;
+        }
+      }
+    }
+  });
+
+  return Array.from(tests.entries());
 };
 
 // ## Helpers
@@ -235,7 +284,10 @@ const _asyncLineReader = filepath => {
 //
 
 if (require.main === module) {
-  main()
-    .then(() => console.log('done'))
-    .catch(err => console.error(err));
+  const args = process.argv.slice(1);
+  const _has = flags => !!flags.find(f => args.includes(f));
+
+  const pretty = _has(['-p', '--pretty']);
+  const noSkinTone = _has(['-S', '--no-skin-tone']);
+  main(pretty, noSkinTone).catch(err => console.error(err));
 }
