@@ -1,6 +1,7 @@
 const assert = require('assert');
 const { promisify } = require('util');
 const fs = require('fs');
+const path = require('path');
 const readline = require('readline');
 
 const rw = require('rw');
@@ -10,9 +11,11 @@ const readFileAsync = promisify(fs.readFile);
 const FQFD_SUFFIX = '_fe0f';
 const RANGE_DIVIDER = '..';
 
-const EMOJI_TEST = './emoji-test.txt';
-const EMOJI_SEQUENCES = './emoji-sequences.txt';
-const EMOJI_ZWJ_SEQUENCES = './emoji-zwj-sequences.txt';
+const _pathTo = filename => path.join(__dirname, 'data-sources', filename);
+
+const EMOJI_TEST = _pathTo('emoji-test.txt');
+const EMOJI_SEQUENCES = _pathTo('emoji-sequences.txt');
+const EMOJI_ZWJ_SEQUENCES = _pathTo('emoji-zwj-sequences.txt');
 const ALL_EMOJI_SEQUENCES = [EMOJI_SEQUENCES, EMOJI_ZWJ_SEQUENCES];
 
 // ## Main

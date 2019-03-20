@@ -1,59 +1,70 @@
 ## Content Scraping
 
-1. Get full test page
+Data sources loaded from unicode.org website:
 
-   ```
-   wget https://unicode.org/Public/emoji/12.0/emoji-test.txt
-   ```
+```
+cd data-sources/
+wget https://unicode.org/Public/emoji/12.0/emoji-test.txt
+wget https://unicode.org/Public/emoji/12.0/emoji-sequences.txt
+wget https://unicode.org/Public/emoji/12.0/emoji-zwj-sequences.txt
+```
 
-2. Get sequences (with versions):
+- emoji-test.txt has the full list of emojis with names
+- sequences.txt files have the emoji versions
 
-   ```
-   wget https://unicode.org/Public/emoji/12.0/emoji-sequences.txt
-   wget https://unicode.org/Public/emoji/12.0/emoji-zwj-sequences.txt
-   ```
+## Generating output
 
-## Converting the list
+The following command outputs the
 
-1. Generate mapping of code prefix to version (as a trie?) from emoji-sequences
+```bash
+node index.js --pretty > emojis-v12.json
+node index.js --pretty --no-skin-tone > emojis-v12-no-skin-tone.json
+```
 
-   ```
-   231A..231B    ; Basic_Emoji              ; watch                                                          #  1.1  [2] (⌚..⌛)
-   ```
+Usage:
 
-   gets 231a to 231b and sets 1.1 as the root.
+```
+node index.js [--no-skin-tone|-S] [--pretty|-p]
+```
 
-2. Get full list from full-emoji-list and gather:
+## Output
 
-   - category name (bighead)
-   - sub category name (mediumhead)
-   - code
-   - cldr short name
+See emojis-by-category.json, but the general structure is:
 
-   e.g., the html has the headers:
+```json
+{
+  "versions": [12, 11, ...],
+  "tests": [
+    [12, "1f90d"],
+    ...
+  ],
+  "groups": [
+    {
+      "group": "Smileys & Emotion",
+      "subgroups": [
+        {
+          "subgroup": "face-smiling",
+          "emojis": [
+            ["1f600", "grinning face", 6.0],
+            ...
+          ]
+        },
+        ...
+      ]
+    },
+    ...
+  ]
+```
 
-   ```
-   <tr><th colspan='15' class='bighead'><a href='#smileys_&amp;_emotion' name='smileys_&amp;_emotion'>Smileys &amp; Emotion</a></th></tr>
-   <tr><th colspan='15' class='mediumhead'><a href='#face-smiling' name='face-smiling'>face-smiling</a></th></tr>
-   ```
+- `versions` - all emoji release versions in the dataset
+- `tests` - specific codes that can be used to test for support by version number
+- `groups` - data containing group -> subgroup -> emojis
 
-3. Generate:
+NOTE: the code value is a lowercase string of the hex values with multiple character codes separated by underscores. This makes it easier to review by eye, I could consider changing this... but you can convert a code into the bytes for an emoji character via:
 
-   ```
-   {
-     versions: [12.0, 11.0, ..., 1.1],
-     categories: [
-       {
-         category: 'Smileys & Emotion',
-         subs: {
-           sub: 'face-smiling'
-           emojis: [
-             ['1f600', 'grinning face', 6.1]
-           ]
-         }
-       }
-     ]
-   }
-   ```
-
-   Note: mult-codes as '1f3f4_e0067_e0062_e0065_e006e_e0067_e007f'
+```js
+const _asEmoji = code => {
+  const nums = code.split('_').map(val => parseInt(val, 16));
+  return String.fromCodePoint.apply(String, nums);
+};
+```
