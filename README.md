@@ -72,3 +72,7 @@ const _asEmoji = code => {
   return String.fromCodePoint.apply(String, nums);
 };
 ```
+
+## Alternate views
+
+Open up the .txt files in the test/ folder to view emojis by version and visually check for support in whatever program you like, e.g., a web browser or your terminal.
