@@ -63,6 +63,7 @@ See emojis-by-category.json, but the general structure is:
 - `versions` - all emoji release versions in the dataset (in descending order)
 - `tests` - specific codes that can be used to test for support by version number (in descending order)
 - `groups` - data containing group -> subgroup -> emojis
+- `extraTests` - optional extra tests for groups of emojis indepedendent from the main tests that you can do to filter down your results
 
 NOTE: the code value is a lowercase string of the hex values with multiple character codes separated by underscores. This makes it easier to review by eye, I could consider changing this... but you can convert a code into the bytes for an emoji character via:
 
