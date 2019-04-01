@@ -18,6 +18,11 @@ const EMOJI_SEQUENCES = _pathTo('emoji-sequences.txt');
 const EMOJI_ZWJ_SEQUENCES = _pathTo('emoji-zwj-sequences.txt');
 const ALL_EMOJI_SEQUENCES = [EMOJI_SEQUENCES, EMOJI_ZWJ_SEQUENCES];
 
+const UNSUPPORTED_WIN7_CHROME49 = path.join(
+  __dirname,
+  'unsupported-win7-chrome49.txt'
+);
+
 // ## Main
 
 const main = async (pretty = false, noSkinTone = false) => {
@@ -29,8 +34,9 @@ const main = async (pretty = false, noSkinTone = false) => {
   versions.sort((a, b) => b - a); // sort in descending order
 
   const tests = getVersionTests(versions, groups);
+  const extraTests = await getExtraTests();
 
-  const result = { versions, tests, groups };
+  const result = { versions, tests, groups, extraTests };
 
   const content = pretty
     ? JSON.stringify(result, null, 2)
@@ -270,6 +276,30 @@ const getVersionTests = (versions, groups) => {
   });
 
   return Array.from(tests.entries());
+};
+
+// ## Extra tests
+
+const getExtraTests = async () => {
+  const ret = [];
+
+  // unsupported windows 7, chrome 49
+  const codes = [];
+  const rl = _asyncLineReader(UNSUPPORTED_WIN7_CHROME49);
+  for await (const line of rl) {
+    if (line.trim() && !line.startsWith('#')) {
+      codes.push(line.split('\t')[0]);
+    }
+  }
+
+  ret.push({
+    name:
+      'unsupported windows 7, chrome 49 (overlaps with v6, v5.2, v4.1, despite support for the majority of these versions)',
+    test: '1f31d', // full moon face
+    codes
+  });
+
+  return ret;
 };
 
 // ## Helpers
